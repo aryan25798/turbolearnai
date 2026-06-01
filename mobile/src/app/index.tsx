@@ -2018,7 +2018,7 @@ export default function HomeScreen() {
                           {msg.image && (
                             <Image 
                               source={{ uri: msg.image }} 
-                              style={{ width: '100%', height: 180, borderRadius: 12, marginBottom: 8, resizeMode: 'cover' }} 
+                              style={{ width: 220, height: 150, borderRadius: 12, marginBottom: 8, resizeMode: 'cover' }} 
                             />
                           )}
                           {isUser ? (
