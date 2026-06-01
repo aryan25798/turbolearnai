@@ -1313,6 +1313,18 @@ export default function HomeScreen() {
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
+  // ── Keyboard Auto Scroll ──
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      setTimeout(() => {
+        listRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    return () => {
+      showSubscription.remove();
+    };
+  }, []);
+
   // ── Chat History Getter ──
 
   const getActiveHistory = useCallback(() => {
@@ -1532,144 +1544,164 @@ export default function HomeScreen() {
     );
   }
 
-  // ── Auth ──
   if (!user) {
     return (
-      <View style={ss.authContainer}>
-        <SafeAreaView style={ss.authInner}>
-          <View style={ss.logoContainer}>
-            <View style={ss.iconCircle}>
-              <Ionicons name="sparkles" size={38} color="#a855f7" />
-            </View>
-            <Text style={ss.authTitle}>TurboLearn AI</Text>
-            <Text style={ss.authSubtitle}>Dual-Core Native Study Engine</Text>
-          </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={ss.authContainer}
+      >
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={ss.authInner}>
+              <View style={ss.logoContainer}>
+                <View style={ss.iconCircle}>
+                  <Ionicons name="sparkles" size={38} color="#a855f7" />
+                </View>
+                <Text style={ss.authTitle}>TurboLearn AI</Text>
+                <Text style={ss.authSubtitle}>Dual-Core Native Study Engine</Text>
+              </View>
 
-          <View style={ss.formContainer}>
-            {Platform.OS === 'web' ? (
-              <TouchableOpacity style={ss.googleButton} onPress={handleGoogleLogin} disabled={authLoading}>
-                {authLoading ? (
-                  <ActivityIndicator color="#fff" />
+              <View style={ss.formContainer}>
+                {Platform.OS === 'web' ? (
+                  <TouchableOpacity style={ss.googleButton} onPress={handleGoogleLogin} disabled={authLoading}>
+                    {authLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-google" size={18} color="#fff" />
+                        <Text style={ss.googleButtonText}>Continue with Google</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 ) : (
                   <>
-                    <Ionicons name="logo-google" size={18} color="#fff" />
-                    <Text style={ss.googleButtonText}>Continue with Google</Text>
+                    <TextInput style={ss.input} placeholder="Email"
+                      placeholderTextColor="#4b5563" value={authEmail}
+                      onChangeText={setAuthEmail} keyboardType="email-address"
+                      autoCapitalize="none" autoComplete="email" />
+                    <TextInput style={ss.input} placeholder="Password"
+                      placeholderTextColor="#4b5563" value={authPassword}
+                      onChangeText={setAuthPassword} secureTextEntry
+                      autoCapitalize="none" autoComplete={isSignUp ? 'new-password' : 'password'} />
+                    <TouchableOpacity style={ss.authButton} onPress={handleEmailAuth} disabled={authLoading}>
+                      {authLoading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={ss.authButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError(''); }} style={{ alignSelf: 'center', marginTop: 4 }}>
+                      <Text style={{ color: '#6b7280', fontSize: 13 }}>
+                        {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Create One"}
+                      </Text>
+                    </TouchableOpacity>
+                    {ENABLE_DEMO_LOGIN && (
+                      <TouchableOpacity style={ss.demoButton} onPress={handleDemoStudentLogin} disabled={authLoading}>
+                        <Ionicons name="flask-outline" size={18} color="#a855f7" />
+                        <Text style={ss.demoButtonText}>Demo Student Login</Text>
+                      </TouchableOpacity>
+                    )}
                   </>
                 )}
+
+                {error ? <Text style={ss.errorText}>{error}</Text> : null}
+              </View>
+
+              <TouchableOpacity onPress={() => setShowSupport(true)} style={{ marginTop: 16, alignSelf: 'center' }}>
+                <Text style={{ color: '#4b5563', fontSize: 11, textDecorationLine: 'underline' }}>Having trouble logging in?</Text>
               </TouchableOpacity>
-            ) : (
-              <>
-                <TextInput style={ss.input} placeholder="Email"
-                  placeholderTextColor="#4b5563" value={authEmail}
-                  onChangeText={setAuthEmail} keyboardType="email-address"
-                  autoCapitalize="none" autoComplete="email" />
-                <TextInput style={ss.input} placeholder="Password"
-                  placeholderTextColor="#4b5563" value={authPassword}
-                  onChangeText={setAuthPassword} secureTextEntry
-                  autoCapitalize="none" autoComplete={isSignUp ? 'new-password' : 'password'} />
-                <TouchableOpacity style={ss.authButton} onPress={handleEmailAuth} disabled={authLoading}>
-                  {authLoading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={ss.authButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError(''); }} style={{ alignSelf: 'center', marginTop: 4 }}>
-                  <Text style={{ color: '#6b7280', fontSize: 13 }}>
-                    {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Create One"}
-                  </Text>
-                </TouchableOpacity>
-                {ENABLE_DEMO_LOGIN && (
-                  <TouchableOpacity style={ss.demoButton} onPress={handleDemoStudentLogin} disabled={authLoading}>
-                    <Ionicons name="flask-outline" size={18} color="#a855f7" />
-                    <Text style={ss.demoButtonText}>Demo Student Login</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
-
-            {error ? <Text style={ss.errorText}>{error}</Text> : null}
-          </View>
-
-          <TouchableOpacity onPress={() => setShowSupport(true)} style={{ marginTop: 16, alignSelf: 'center' }}>
-            <Text style={{ color: '#4b5563', fontSize: 11, textDecorationLine: 'underline' }}>Having trouble logging in?</Text>
-          </TouchableOpacity>
-          <Text style={ss.authFooter}>Protected by Firebase Authentication</Text>
+              <Text style={ss.authFooter}>Protected by Firebase Authentication</Text>
+            </View>
+          </ScrollView>
         </SafeAreaView>
         <SupportModal visible={showSupport} onClose={() => setShowSupport(false)} />
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
-  // ── Email Verification Screen ──
   if (needsVerification) {
     return (
-      <View style={ss.authContainer}>
-        <SafeAreaView style={ss.authInner}>
-          <View style={ss.logoContainer}>
-            <View style={ss.iconCircle}>
-              <Ionicons name="mail-outline" size={38} color="#f59e0b" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={ss.authContainer}
+      >
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={ss.authInner}>
+              <View style={ss.logoContainer}>
+                <View style={ss.iconCircle}>
+                  <Ionicons name="mail-outline" size={38} color="#f59e0b" />
+                </View>
+                <Text style={ss.authTitle}>Verify Your Email</Text>
+                <Text style={[ss.authSubtitle, { textAlign: 'center', paddingHorizontal: 20 }]}>
+                  We sent a verification email to {'\n'}
+                  <Text style={{ color: '#a855f7', fontWeight: '600' }}>{user?.email}</Text>
+                  {'\n\n'}
+                  Please check your inbox and click the link to activate your account.
+                </Text>
+              </View>
+
+              <View style={{ gap: 10, marginBottom: 20 }}>
+                {verificationEmailSent && (
+                  <Text style={{ color: '#22c55e', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>
+                    <Ionicons name="checkmark-circle" size={16} color="#22c55e" /> Verification email sent!
+                  </Text>
+                )}
+
+                <TouchableOpacity style={ss.authButton} onPress={async () => {
+                  if (!auth.currentUser) return;
+                  setAuthLoading(true);
+                  try {
+                    await auth.currentUser.reload();
+                    if (auth.currentUser.emailVerified) {
+                      setNeedsVerification(false);
+                      setVerificationEmailSent(false);
+                    } else {
+                      setError('Email not verified yet. Please check your inbox.');
+                    }
+                  } catch (err: any) {
+                    setError(err.message || 'Failed to check verification status.');
+                  }
+                  setAuthLoading(false);
+                }} disabled={authLoading}>
+                  {authLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={ss.authButtonText}>I've Verified — Continue</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity style={ss.googleButton} onPress={handleResendVerification} disabled={verifSending}>
+                  {verifSending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={ss.googleButtonText}>Resend Verification Email</Text>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={{ color: '#6b7280', fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+                  Didn't receive it? Check spam or try a different email.
+                </Text>
+
+                {error ? <Text style={ss.errorText}>{error}</Text> : null}
+              </View>
+
+              <TouchableOpacity onPress={handleLogout} style={{ alignSelf: 'center', marginTop: 8 }}>
+                <Text style={{ color: '#4b5563', fontSize: 13, textDecorationLine: 'underline' }}>Sign Out</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={ss.authTitle}>Verify Your Email</Text>
-            <Text style={[ss.authSubtitle, { textAlign: 'center', paddingHorizontal: 20 }]}>
-              We sent a verification email to {'\n'}
-              <Text style={{ color: '#a855f7', fontWeight: '600' }}>{user?.email}</Text>
-              {'\n\n'}
-              Please check your inbox and click the link to activate your account.
-            </Text>
-          </View>
-
-          <View style={{ gap: 10, marginBottom: 20 }}>
-            {verificationEmailSent && (
-              <Text style={{ color: '#22c55e', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>
-                <Ionicons name="checkmark-circle" size={16} color="#22c55e" /> Verification email sent!
-              </Text>
-            )}
-
-            <TouchableOpacity style={ss.authButton} onPress={async () => {
-              if (!auth.currentUser) return;
-              setAuthLoading(true);
-              try {
-                await auth.currentUser.reload();
-                if (auth.currentUser.emailVerified) {
-                  setNeedsVerification(false);
-                  setVerificationEmailSent(false);
-                } else {
-                  setError('Email not verified yet. Please check your inbox.');
-                }
-              } catch (err: any) {
-                setError(err.message || 'Failed to check verification status.');
-              }
-              setAuthLoading(false);
-            }} disabled={authLoading}>
-              {authLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={ss.authButtonText}>I've Verified — Continue</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={ss.googleButton} onPress={handleResendVerification} disabled={verifSending}>
-              {verifSending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={ss.googleButtonText}>Resend Verification Email</Text>
-              )}
-            </TouchableOpacity>
-
-            <Text style={{ color: '#6b7280', fontSize: 12, textAlign: 'center', marginTop: 4 }}>
-              Didn't receive it? Check spam or try a different email.
-            </Text>
-
-            {error ? <Text style={ss.errorText}>{error}</Text> : null}
-          </View>
-
-          <TouchableOpacity onPress={handleLogout} style={{ alignSelf: 'center', marginTop: 8 }}>
-            <Text style={{ color: '#4b5563', fontSize: 13, textDecorationLine: 'underline' }}>Sign Out</Text>
-          </TouchableOpacity>
+          </ScrollView>
         </SafeAreaView>
         <SupportModal visible={showSupport} onClose={() => setShowSupport(false)} />
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
