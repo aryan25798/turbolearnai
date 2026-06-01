@@ -81,6 +81,51 @@ const DEFAULT_MODELS: Record<ModelKey, string> = {
   deepseek: 'hf-deepseek-r1',
 };
 
+// ── App Logging & Crash Interceptor ──
+export const reportLog = async (
+  level: 'crash' | 'error' | 'warning' | 'info',
+  message: string,
+  stack: string | null = null,
+  userEmail: string | null = null
+) => {
+  try {
+    const logData = {
+      level,
+      message: message || 'Unknown error',
+      stack: stack || null,
+      platform: Platform.OS,
+      timestamp: serverTimestamp(),
+      userEmail: userEmail || 'Anonymous',
+      appVersion: '1.0.0'
+    };
+    await addDoc(collection(db, 'app_logs'), logData);
+  } catch (err) {
+    console.warn('Logging to Firestore failed:', err);
+  }
+};
+
+// Global JS Crash Interceptor
+try {
+  const globalAny: any = global;
+  const errorUtils = globalAny.ErrorUtils;
+  if (errorUtils) {
+    const defaultErrorHandler = errorUtils.getGlobalHandler();
+    errorUtils.setGlobalHandler(async (error: any, isFatal?: boolean) => {
+      try {
+        const email = auth.currentUser?.email || 'Anonymous';
+        await reportLog('crash', error?.message || 'Unhandled Runtime Crash', error?.stack || null, email);
+      } catch (e) {
+        console.error("Global crash logger error:", e);
+      }
+      if (defaultErrorHandler) {
+        defaultErrorHandler(error, isFatal);
+      }
+    });
+  }
+} catch (e) {
+  console.warn("Failed to set global crash handler:", e);
+}
+
 const TAB_LABELS: Record<ModelKey, string> = {
   groq: 'Llama',
   google: 'Gemini',
@@ -820,8 +865,9 @@ export default function HomeScreen() {
       }
     } catch (err) {
       console.warn('Image picker failed:', err);
+      reportLog('error', 'Image picker failed: ' + (err as any)?.message, (err as any)?.stack, user?.email || 'Anonymous');
     }
-  }, []);
+  }, [user]);
 
   const captureImage = useCallback(async () => {
     try {
@@ -839,8 +885,9 @@ export default function HomeScreen() {
       }
     } catch (err) {
       console.warn('Camera capture failed:', err);
+      reportLog('error', 'Camera capture failed: ' + (err as any)?.message, (err as any)?.stack, user?.email || 'Anonymous');
     }
-  }, []);
+  }, [user]);
 
   const handleScan = useCallback(async () => {
     if (!image || !user) return;
@@ -854,6 +901,7 @@ export default function HomeScreen() {
       setImage(null);
     } catch (err: any) {
       Alert.alert('OCR Failed', err.message || 'Could not extract text from image.');
+      reportLog('error', 'OCR Scan Failed: ' + err?.message, err?.stack, user?.email || 'Anonymous');
     } finally {
       setLoading(false);
     }

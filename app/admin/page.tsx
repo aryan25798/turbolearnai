@@ -466,7 +466,15 @@ function AdminContent() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'banned' | 'admin'>('all');
   
   // Tabs & Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'chats' | 'support' | 'deleted-chats'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'chats' | 'support' | 'deleted-chats' | 'logs'>('dashboard');
+
+  // ✅ System App Logs State
+  const [appLogs, setAppLogs] = useState<any[]>([]);
+  const [filterLogLevel, setFilterLogLevel] = useState<'all' | 'crash' | 'error' | 'warning' | 'info'>('all');
+  const [filterLogPlatform, setFilterLogPlatform] = useState<'all' | 'android' | 'ios' | 'web'>('all');
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [fetchingLogs, setFetchingLogs] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   // ✅ Soft-Deleted Sessions State
   const [deletedSessions, setDeletedSessions] = useState<any[]>([]);
@@ -506,7 +514,7 @@ function AdminContent() {
                  const uidParam = searchParams.get('uid');
                  const sessionParam = searchParams.get('sessionId');
 
-                 if (tabParam === 'users' || tabParam === 'chats' || tabParam === 'dashboard' || tabParam === 'support' || tabParam === 'deleted-chats') {
+                 if (tabParam === 'users' || tabParam === 'chats' || tabParam === 'dashboard' || tabParam === 'support' || tabParam === 'deleted-chats' || tabParam === 'logs') {
                      setActiveTab(tabParam as any);
                  }
 
@@ -772,6 +780,57 @@ function AdminContent() {
       }
   };
 
+  // Real-Time System App Logs Subscription
+  useEffect(() => {
+    if (!isAdmin || activeTab !== 'logs') return;
+
+    setFetchingLogs(true);
+    const q = query(
+      collection(db, 'app_logs'),
+      orderBy('timestamp', 'desc'),
+      limit(100)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedLogs = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      setAppLogs(fetchedLogs);
+      setFetchingLogs(false);
+    }, (err) => {
+      console.error("Failed to load logs:", err);
+      setFetchingLogs(false);
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin, activeTab]);
+
+  const handleClearLogs = async () => {
+    if (!confirm("Are you sure you want to permanently delete all logs? This action cannot be undone.")) return;
+    try {
+      const q = query(collection(db, 'app_logs'), limit(100));
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.docs.forEach(docSnap => {
+        batch.delete(docSnap.ref);
+      });
+      await batch.commit();
+      alert("Latest logs cleared successfully.");
+    } catch (err) {
+      console.error("Failed to clear logs:", err);
+      alert("Purge failed: " + (err as any)?.message);
+    }
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    try {
+      await deleteDoc(doc(db, 'app_logs', logId));
+    } catch (err) {
+      console.error("Failed to delete log document:", err);
+    }
+  };
+
   const inspectDeletedSession = async (sess: any) => {
       let targetUser = users.find(u => u.uid === sess.userId) as UserData;
       if (!targetUser) {
@@ -830,7 +889,7 @@ function AdminContent() {
   };
 
   // 4. ACTIONS & UPDATES
-  const handleSwitchTab = (tab: 'dashboard' | 'users' | 'chats' | 'support' | 'deleted-chats') => {
+  const handleSwitchTab = (tab: 'dashboard' | 'users' | 'chats' | 'support' | 'deleted-chats' | 'logs') => {
       setActiveTab(tab);
       setIsSidebarOpen(false); 
       const params = new URLSearchParams(searchParams.toString());
@@ -1102,6 +1161,9 @@ function AdminContent() {
             <button onClick={() => handleSwitchTab('deleted-chats')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'deleted-chats' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'text-gray-400 hover:bg-white/5'}`}>
                 <Trash2 size={18} /> Deleted Chats
             </button>
+            <button onClick={() => handleSwitchTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'logs' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-gray-400 hover:bg-white/5'}`}>
+                <Terminal size={18} /> System App Logs
+            </button>
         </nav>
 
         <div className="p-4 border-t border-white/5">
@@ -1118,9 +1180,9 @@ function AdminContent() {
         <header className="h-16 border-b border-white/10 bg-[#09090b]/90 backdrop-blur-md flex items-center justify-between px-4 md:px-8 z-10 shrink-0">
             <div className="flex items-center gap-3">
                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-gray-400 hover:text-white"><Menu size={20} /></button>
-                <div className={`hidden md:block w-2 h-2 rounded-full ${activeTab === 'dashboard' ? 'bg-orange-500' : activeTab === 'users' ? 'bg-red-500' : activeTab === 'support' ? 'bg-green-500' : activeTab === 'deleted-chats' ? 'bg-rose-500' : 'bg-blue-500'} animate-pulse`}></div>
-                <h2 className="font-semibold text-sm tracking-wide text-gray-200 uppercase truncate">
-                    {activeTab === 'dashboard' ? 'System Overview' : activeTab === 'users' ? 'User Database' : activeTab === 'support' ? 'Support Center' : activeTab === 'deleted-chats' ? 'Deleted Chats' : 'Forensic Inspector'}
+                <div className={`hidden md:block w-2 h-2 rounded-full ${activeTab === 'dashboard' ? 'bg-orange-500' : activeTab === 'users' ? 'bg-red-500' : activeTab === 'support' ? 'bg-green-500' : activeTab === 'deleted-chats' ? 'bg-rose-500' : activeTab === 'logs' ? 'bg-purple-500' : 'bg-blue-500'} animate-pulse`}></div>
+                <h2 className="text-sm md:text-base font-bold text-white font-mono flex items-center gap-2">
+                    {activeTab === 'dashboard' ? 'System Overview' : activeTab === 'users' ? 'User Database' : activeTab === 'support' ? 'Support Center' : activeTab === 'deleted-chats' ? 'Deleted Chats' : activeTab === 'logs' ? 'System App Logs' : 'Forensic Inspector'}
                 </h2>
             </div>
             
@@ -1525,6 +1587,195 @@ function AdminContent() {
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* 5. ✅ SYSTEM APP LOGS TAB */}
+            {activeTab === 'logs' && (
+                <div className="bg-[#0c0c0e] rounded-xl border border-white/5 overflow-hidden shadow-2xl flex flex-col h-full">
+                    {/* Header */}
+                    <div className="p-6 border-b border-white/5 bg-white/[0.01] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                <Terminal size={18} className="text-purple-400" /> System App Logs & Crash Audits
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Real-time system monitoring, unhandled exceptions, and custom debug alerts pushed directly from mobile and web client workspaces.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={handleClearLogs}
+                                className="shrink-0 text-xs bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-500/20 px-4 py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+                            >
+                                <Trash2 size={14} /> Clear All Logs
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Filter & Live Search Bar */}
+                    <div className="p-4 border-b border-white/5 bg-white/[0.005] grid grid-cols-1 md:grid-cols-4 gap-3 shrink-0">
+                        {/* Search Input */}
+                        <div className="md:col-span-2 relative">
+                            <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
+                            <input 
+                                type="text"
+                                placeholder="Search logs by error, message, stack, or email..."
+                                value={logSearchQuery}
+                                onChange={(e) => setLogSearchQuery(e.target.value)}
+                                className="w-full bg-[#131316] border border-white/5 pl-10 pr-4 py-2 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 font-mono"
+                            />
+                        </div>
+
+                        {/* Level Filter */}
+                        <div>
+                            <select 
+                                value={filterLogLevel}
+                                onChange={(e: any) => setFilterLogLevel(e.target.value)}
+                                className="w-full bg-[#131316] border border-white/5 px-3 py-2 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-purple-500/50"
+                            >
+                                <option value="all">Severity Level: All</option>
+                                <option value="crash">🚨 Crash</option>
+                                <option value="error">🛑 Error</option>
+                                <option value="warning">⚠️ Warning</option>
+                                <option value="info">ℹ️ Info</option>
+                            </select>
+                        </div>
+
+                        {/* Platform Filter */}
+                        <div>
+                            <select 
+                                value={filterLogPlatform}
+                                onChange={(e: any) => setFilterLogPlatform(e.target.value)}
+                                className="w-full bg-[#131316] border border-white/5 px-3 py-2 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-purple-500/50"
+                            >
+                                <option value="all">Platform: All</option>
+                                <option value="android">🤖 Android</option>
+                                <option value="ios">🍎 iOS</option>
+                                <option value="web">🌐 Web</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Logs List Container */}
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        {fetchingLogs && appLogs.length === 0 ? (
+                            <div className="p-20 text-center text-xs text-gray-500 flex flex-col items-center justify-center gap-3">
+                                <Loader2 size={24} className="animate-spin text-purple-500" />
+                                <span>Establishing Real-time Firestore Logging Pipe...</span>
+                            </div>
+                        ) : (() => {
+                            const filteredLogs = appLogs.filter(log => {
+                                const matchesLevel = filterLogLevel === 'all' || log.level === filterLogLevel;
+                                const matchesPlatform = filterLogPlatform === 'all' || log.platform === filterLogPlatform;
+                                const matchesSearch = !logSearchQuery.trim() || 
+                                    (log.message && log.message.toLowerCase().includes(logSearchQuery.toLowerCase())) ||
+                                    (log.userEmail && log.userEmail.toLowerCase().includes(logSearchQuery.toLowerCase())) ||
+                                    (log.stack && log.stack.toLowerCase().includes(logSearchQuery.toLowerCase()));
+                                return matchesLevel && matchesPlatform && matchesSearch;
+                            });
+
+                            if (filteredLogs.length === 0) {
+                                return (
+                                    <div className="p-20 text-center text-xs text-gray-500 flex flex-col items-center justify-center gap-3">
+                                        <CheckCircle size={24} className="text-green-500" />
+                                        <span className="font-semibold uppercase tracking-wider text-gray-400">All Systems Stable</span>
+                                        <span>No app crashes or error logs found matching your filters.</span>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="space-y-3 pb-8">
+                                    {filteredLogs.map((log) => {
+                                        const isError = log.level === 'crash' || log.level === 'error';
+                                        const isWarning = log.level === 'warning';
+                                        
+                                        const formattedTime = log.timestamp?.toDate
+                                            ? new Date(log.timestamp.toDate()).toLocaleString()
+                                            : 'Time N/A';
+
+                                        return (
+                                            <div 
+                                                key={log.id} 
+                                                className={`bg-[#131316]/50 border border-white/5 rounded-lg p-4 transition-all hover:bg-[#131316]/80 flex flex-col relative overflow-hidden ${
+                                                    isError ? 'border-l-4 border-l-red-500' : isWarning ? 'border-l-4 border-l-orange-500' : 'border-l-4 border-l-blue-500'
+                                                }`}
+                                            >
+                                                {/* Top Metadata Header Row */}
+                                                <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {/* Severity Level Badge */}
+                                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider font-mono ${
+                                                            log.level === 'crash' ? 'bg-red-500/20 text-red-400 border border-red-500/20' : 
+                                                            log.level === 'error' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/20' : 
+                                                            log.level === 'warning' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20' : 
+                                                            'bg-blue-500/20 text-blue-400 border border-blue-500/20'
+                                                        }`}>
+                                                            {log.level}
+                                                        </span>
+
+                                                        {/* Platform Badge */}
+                                                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/5 border border-white/10 text-gray-300 font-mono flex items-center gap-1">
+                                                            {log.platform === 'android' ? '🤖 Android' : log.platform === 'ios' ? '🍎 iOS' : '🌐 Web'}
+                                                        </span>
+
+                                                        {/* App Version Badge */}
+                                                        <span className="px-2 py-0.5 rounded text-[9px] font-semibold bg-white/5 text-gray-500 border border-white/5 font-mono">
+                                                            v{log.appVersion || '1.0.0'}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-3">
+                                                        {/* Timestamp */}
+                                                        <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                                                            <Clock size={10} /> {formattedTime}
+                                                        </span>
+
+                                                        {/* Delete Log Button */}
+                                                        <button 
+                                                            onClick={() => handleDeleteLog(log.id)}
+                                                            className="text-gray-550 hover:text-red-450 p-1 rounded transition-colors"
+                                                            title="Dismiss Log Entry"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Error Message & Details */}
+                                                <div className="text-xs font-mono text-gray-200 mt-1 leading-relaxed break-all">
+                                                    {log.message}
+                                                </div>
+
+                                                {/* User Attachment */}
+                                                <div className="mt-2 text-[10px] text-gray-500 font-mono">
+                                                    User Impacted: <span className="text-gray-400">{log.userEmail || 'Anonymous'}</span>
+                                                </div>
+
+                                                {/* Collapsible Stack Trace panel */}
+                                                {log.stack && (
+                                                    <div className="mt-3 border-t border-white/5 pt-3">
+                                                        <button 
+                                                            onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                                                            className="text-[11px] text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 font-mono transition-colors"
+                                                        >
+                                                            <Terminal size={11} /> {expandedLogId === log.id ? '[-] Hide Stack Trace' : '[+] Expand Stack Trace'}
+                                                        </button>
+                                                        {expandedLogId === log.id && (
+                                                            <pre className="mt-2 bg-[#050505] border border-white/5 p-4 rounded-lg text-[10px] text-red-300/80 overflow-x-auto font-mono max-h-96 whitespace-pre leading-5">
+                                                                {log.stack}
+                                                            </pre>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
+                    </div>
                 </div>
             )}
         </div>
