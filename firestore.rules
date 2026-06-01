@@ -1,0 +1,206 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    //  HELPERS
+    // ============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isValidString(field, maxLen) {
+      return field is string && field.size() > 0 && field.size() <= maxLen;
+    }
+
+    function withinSizeLimit(maxBytes) {
+      return request.resource.data.size() <= maxBytes;
+    }
+
+    // ============================================================
+    //  USERS
+    // ============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Self-registration: allow users to initialize their own profile document.
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL',
+          'role', 'status', 'tier', 'customQuota',
+          'createdAt', 'lastLogin'
+        ])
+        && request.resource.data.uid == userId
+        && isValidString(request.resource.data.email, 320)
+        && isValidString(request.resource.data.displayName, 100)
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'pending'
+        && (!request.resource.data.keys().hasAny(['tier', 'customQuota'])
+            || (request.resource.data.tier == 'free' && request.resource.data.customQuota == 50))
+        && withinSizeLimit(2048);
+
+      // Users can update their own profile but CANNOT escalate privileges.
+      allow update: if isAdmin() || (
+        isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'status', 'tier', 'customQuota'
+        ])
+        && request.resource.data.size() <= 2048
+      );
+
+      // Only admins may delete.
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================
+    //  SESSIONS
+    // ============================================================
+
+    match /sessions/{sessionId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'userId', 'title', 'createdAt', 'deletedByUser'
+        ])
+        && isValidString(request.resource.data.title, 200)
+        && request.resource.data.deletedByUser == false
+        && withinSizeLimit(1024);
+
+      allow update: if isAdmin() || (
+        isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedByUser', 'title'])
+        && request.resource.data.size() <= 1024
+      );
+
+      allow delete: if isAdmin()
+        || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // ============================================================
+    //  CHATS (Messages)
+    // ============================================================
+
+    match /chats/{chatId} {
+      // Read: must own the parent session OR be admin
+      allow read: if isAdmin() || (
+        isAuthenticated()
+        && resource.data.sessionId != null
+        && exists(/databases/$(database)/documents/sessions/$(resource.data.sessionId))
+        && get(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data.userId == request.auth.uid
+      );
+
+      // Create: session ownership + field/content validation.
+      // Modified to allow empty content strings (so image-only or aborted fallback writes work)
+      allow create: if isAdmin() || (
+        isAuthenticated()
+        && request.resource.data.sessionId != null
+        && exists(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId))
+        && get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'sessionId', 'role', 'content', 'image', 'provider', 'createdAt'
+        ])
+        && request.resource.data.role in ['user', 'assistant']
+        && request.resource.data.provider in ['groq', 'google', 'deepseek']
+        && request.resource.data.content is string 
+        && request.resource.data.content.size() <= 100000
+        && (
+          !("image" in request.resource.data.keys())
+          || request.resource.data.image == null
+          || request.resource.data.image == ''
+          || (request.resource.data.image is string && request.resource.data.image.size() <= 2000)
+        )
+        && withinSizeLimit(200000)
+      );
+
+      // Only admins may update or delete chat messages.
+      allow update, delete: if isAdmin();
+    }
+
+    // ============================================================
+    //  SUPPORT CHATS
+    // ============================================================
+
+    match /support_chats/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // A user may create their own support document.
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'userId', 'email', 'displayName',
+          'status', 'complaint', 'lastUpdated'
+        ])
+        && request.resource.data.userId == userId
+        && isValidString(request.resource.data.email, 320)
+        && isValidString(request.resource.data.displayName, 100)
+        && isValidString(request.resource.data.complaint, 5000)
+        && request.resource.data.status == 'pending'
+        && withinSizeLimit(8192);
+
+      // Allow: (A) user bumps lastUpdated while chatting, (B) user reopens resolved ticket.
+      // Admin can update anything.
+      allow update: if isAdmin() || (
+        isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'lastUpdated'])
+        && (
+          // A) Not touching status — just bumping lastUpdated after a message
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          ||
+          // B) Reopening: only resolved → pending transition allowed
+          (resource.data.status == 'resolved' && request.resource.data.status == 'pending')
+        )
+      );
+
+      allow delete: if isAdmin();
+
+      // --- Subcollection: Messages inside support_chats ---
+      match /messages/{messageId} {
+        allow read: if isOwner(userId) || isAdmin();
+
+        // Both user and admin can create messages.
+        allow create: if (isOwner(userId) || isAdmin())
+          && request.resource.data.keys().hasOnly([
+            'text', 'sender', 'createdAt'
+          ])
+          && request.resource.data.sender in ['user', 'admin']
+          && isValidString(request.resource.data.text, 10000)
+          && withinSizeLimit(12288);
+
+        // Only admin may update or delete.
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ============================================================
+    //  SUPPORT TICKETS (Guest / Unauthenticated)
+    // ============================================================
+
+    match /support_tickets/{ticketId} {
+      // Anyone may create a ticket (including unauthenticated guests).
+      allow create: if request.resource.data.keys().hasOnly([
+          'email', 'message', 'status', 'createdAt'
+        ])
+        && isValidString(request.resource.data.email, 320)
+        && isValidString(request.resource.data.message, 5000)
+        && request.resource.data.status == 'new'
+        && withinSizeLimit(8192);
+
+      // Only admins may read, update, or delete tickets.
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
