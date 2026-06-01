@@ -88,6 +88,13 @@ export const reportLog = async (
   stack: string | null = null,
   userEmail: string | null = null
 ) => {
+  // Spark Plan Cost Optimization: Only write critical crashes and errors to Firestore.
+  // Ignore warning and info logs to conserve daily free write quotas.
+  if (level !== 'crash' && level !== 'error') {
+    console.log(`[AppLog ${level}]: ${message}`);
+    return;
+  }
+
   try {
     const logData = {
       level,

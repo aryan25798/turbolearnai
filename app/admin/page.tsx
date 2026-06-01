@@ -788,7 +788,7 @@ function AdminContent() {
     const q = query(
       collection(db, 'app_logs'),
       orderBy('timestamp', 'desc'),
-      limit(100)
+      limit(40)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -809,7 +809,7 @@ function AdminContent() {
   const handleClearLogs = async () => {
     if (!confirm("Are you sure you want to permanently delete all logs? This action cannot be undone.")) return;
     try {
-      const q = query(collection(db, 'app_logs'), limit(100));
+      const q = query(collection(db, 'app_logs'), limit(40));
       const snap = await getDocs(q);
       const batch = writeBatch(db);
       snap.docs.forEach(docSnap => {
