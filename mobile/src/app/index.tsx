@@ -625,7 +625,7 @@ export default function HomeScreen() {
         const google: ApiMessage[] = [];
         const deepseek: ApiMessage[] = [];
         fetchedMessages.forEach((data) => {
-          const msg: ApiMessage = { role: data.role, content: data.content || '', id: data.id, feedback: data.feedback || null };
+          const msg: ApiMessage = { role: data.role, content: data.content || '', id: data.id, feedback: data.feedback || null, image: data.image || null };
           if (data.provider === 'groq') groq.push(msg);
           else if (data.provider === 'google') google.push(msg);
           else if (data.provider === 'deepseek') deepseek.push(msg);
@@ -1286,7 +1286,7 @@ export default function HomeScreen() {
     setImage(null);
 
     // 1. Append user message + "Thinking..." to all three histories
-    const userMsg: ApiMessage = { role: 'user', content: userPrompt };
+    const userMsg: ApiMessage = { role: 'user', content: userPrompt, image: activeImage };
     const thinkingMsg: ApiMessage = { role: 'assistant', content: 'Thinking...' };
 
     setGroqHistory(prev => [...prev, userMsg, thinkingMsg]);
@@ -1310,6 +1310,7 @@ export default function HomeScreen() {
         content: userPrompt,
         provider: activeTab,
         userId: user.uid,
+        image: activeImage,
       });
 
       const activeSessionId = saveResult.sessionId;
@@ -1325,6 +1326,7 @@ export default function HomeScreen() {
             content: userPrompt,
             provider: tab,
             userId: user.uid,
+            image: activeImage,
           }).catch(err => console.warn(`Failed to save user msg for ${tab}:`, err));
         }
       }
@@ -2013,6 +2015,12 @@ export default function HomeScreen() {
                     <View style={[ss.messageRow, isUser ? ss.messageUserRow : ss.messageAssistantRow, { marginVertical: 6 }]}>
                       <View style={{ maxWidth: isUser ? '85%' : '94%', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
                         <View style={[ss.bubble, isUser ? ss.bubbleUser : [ss.bubbleAssistant, { borderLeftColor: TAB_COLORS[activeTab], borderLeftWidth: 3 }]]}>
+                          {msg.image && (
+                            <Image 
+                              source={{ uri: msg.image }} 
+                              style={{ width: '100%', height: 180, borderRadius: 12, marginBottom: 8, resizeMode: 'cover' }} 
+                            />
+                          )}
                           {isUser ? (
                             isEditing ? (
                               <View>

@@ -13,6 +13,7 @@ const ChatSaveSchema = z.object({
   content: z.string().min(1).max(100000),
   provider: z.enum(['google', 'groq', 'deepseek']),
   userId: z.string().min(1),
+  image: z.string().nullable().optional(),
 });
 
 export async function POST(req: Request) {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid request payload", details: parseResult.error }, { status: 400 });
     }
 
-    const { sessionId, role, content, provider, userId: bodyUserId } = parseResult.data;
+    const { sessionId, role, content, provider, userId: bodyUserId, image } = parseResult.data;
 
     let userId: string;
     try {
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
       content,
       provider,
       createdAt: FieldValue.serverTimestamp(),
+      ...(image ? { image } : {}),
     });
 
     return NextResponse.json({ 

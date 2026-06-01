@@ -34,6 +34,7 @@ export interface ApiMessage {
   content: string;
   id?: string;
   feedback?: 'up' | 'down' | null;
+  image?: string | null;
 }
 
 export interface QuotaData {
@@ -95,6 +96,7 @@ export async function saveChatMessage(params: {
   content: string;
   provider: 'google' | 'groq' | 'deepseek';
   userId: string;
+  image?: string | null;
 }): Promise<{ success: boolean; messageId: string; sessionId: string }> {
   try {
     const headers = await getAuthHeaders();

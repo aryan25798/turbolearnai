@@ -48,12 +48,17 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-// getAuth() auto-detects localStorage → uses browserLocalPersistence
-const auth = getAuth(app);
-
-const db = initializeFirestore(app, { experimentalForceLongPolling: true });
+let app: any;
+let auth: any;
+let db: any;
 const googleProvider = new GoogleAuthProvider();
+
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app);
+  db = initializeFirestore(app, { experimentalForceLongPolling: true });
+} catch (e) {
+  console.error("🔥 Firebase initialization failed on startup:", e);
+}
 
 export { auth, db, googleProvider, app };
