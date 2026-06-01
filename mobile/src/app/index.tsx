@@ -371,6 +371,7 @@ export default function HomeScreen() {
   // ── UI ──
   const [isOffline, setIsOffline] = useState(false);
   const [image, setImage] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showSupport, setShowSupport] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -2011,15 +2012,39 @@ export default function HomeScreen() {
                   const isEditing = editingIndex === index;
                   const showCopied = copiedIndex === index;
                   const fb = msg.feedback;
+
+                  const chatImageWidth = Math.min(260, screenWidth * 0.65);
+                  const chatImageHeight = Math.min(180, chatImageWidth * 0.7);
+
                   return (
                     <View style={[ss.messageRow, isUser ? ss.messageUserRow : ss.messageAssistantRow, { marginVertical: 6 }]}>
                       <View style={{ maxWidth: isUser ? '85%' : '94%', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
                         <View style={[ss.bubble, isUser ? ss.bubbleUser : [ss.bubbleAssistant, { borderLeftColor: TAB_COLORS[activeTab], borderLeftWidth: 3 }]]}>
                           {msg.image && (
-                            <Image 
-                              source={{ uri: msg.image }} 
-                              style={{ width: 220, height: 150, borderRadius: 12, marginBottom: 8, resizeMode: 'cover' }} 
-                            />
+                            <TouchableOpacity
+                              activeOpacity={0.85}
+                              onPress={() => setLightboxImage(msg.image || null)}
+                              style={{
+                                width: chatImageWidth,
+                                height: chatImageHeight,
+                                borderRadius: 12,
+                                overflow: 'hidden',
+                                borderWidth: 1,
+                                borderColor: isUser ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+                                marginBottom: 8,
+                                backgroundColor: '#1e1f20',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.25,
+                                shadowRadius: 3.84,
+                                elevation: 5,
+                              }}
+                            >
+                              <Image 
+                                source={{ uri: msg.image }} 
+                                style={{ width: '100%', height: '100%', resizeMode: 'cover' }} 
+                              />
+                            </TouchableOpacity>
                           )}
                           {isUser ? (
                             isEditing ? (
@@ -2096,16 +2121,26 @@ export default function HomeScreen() {
 
         {/* ── Image Preview ── */}
         {image && (
-          <View style={ss.imagePreview}>
-            <Image source={{ uri: image }} style={ss.imagePreviewImg} />
-            <View style={ss.imageActions}>
-              <TouchableOpacity onPress={handleScan} style={ss.imageActionBtn}>
-                <Ionicons name="scan-outline" size={16} color="#a855f7" />
-                <Text style={{ color: '#a855f7', fontSize: 11 }}>Scan</Text>
+          <View style={ss.imagePreviewContainer}>
+            <View style={ss.imagePreviewCard}>
+              <Image source={{ uri: image }} style={ss.imagePreviewImgPremium} />
+              
+              {/* Scan / OCR Button Overlay */}
+              <TouchableOpacity 
+                onPress={handleScan} 
+                style={ss.imagePreviewScanBtn}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="scan" size={14} color="#fff" />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setImage(null)} style={ss.imageActionBtn}>
-                <Ionicons name="close-circle" size={16} color="#ef4444" />
-                <Text style={{ color: '#ef4444', fontSize: 11 }}>Remove</Text>
+
+              {/* Close / Remove Button Overlay */}
+              <TouchableOpacity 
+                onPress={() => setImage(null)} 
+                style={ss.imagePreviewCloseBtn}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={14} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
@@ -2258,6 +2293,39 @@ export default function HomeScreen() {
                 )}
               </ScrollView>
             </View>
+          </View>
+        </Modal>
+
+        {/* ── Image Lightbox Modal ── */}
+        <Modal
+          visible={lightboxImage !== null}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setLightboxImage(null)}
+        >
+          <View style={ss.lightboxContainer}>
+            {/* Background Touchable to dismiss */}
+            <TouchableOpacity 
+              activeOpacity={1} 
+              style={StyleSheet.absoluteFillObject} 
+              onPress={() => setLightboxImage(null)} 
+            />
+
+            {lightboxImage && (
+              <Image 
+                source={{ uri: lightboxImage }} 
+                style={ss.lightboxImage} 
+              />
+            )}
+
+            {/* Close Button placed dynamically under the notch */}
+            <TouchableOpacity 
+              onPress={() => setLightboxImage(null)} 
+              style={[ss.lightboxCloseBtn, { top: Math.max(20, insets.top) }]}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
           </View>
         </Modal>
       </View>
@@ -2466,13 +2534,60 @@ const ss = StyleSheet.create({
   },
 
   // ── Image Preview ──
-  imagePreview: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, gap: 8,
+  imagePreviewContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
     backgroundColor: '#131314',
+    flexDirection: 'row',
   },
-  imagePreviewImg: { width: 48, height: 48, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  imageActions: { flexDirection: 'row', gap: 8 },
-  imageActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.03)' },
+  imagePreviewCard: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  imagePreviewImgPremium: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
+    resizeMode: 'cover',
+  },
+  imagePreviewCloseBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1.5,
+    elevation: 3,
+  },
+  imagePreviewScanBtn: {
+    position: 'absolute',
+    bottom: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#a855f7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1.5,
+    elevation: 3,
+  },
 
   // ── Input Bar ──
   inputBar: {
@@ -2536,4 +2651,28 @@ const ss = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 16, paddingVertical: 11,
   },
   quickPromptText: { color: '#e5e7eb', fontSize: 13, fontWeight: '500' },
+
+  // ── Lightbox Modal ──
+  lightboxContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '80%',
+  },
+  lightboxCloseBtn: {
+    position: 'absolute',
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
 });
