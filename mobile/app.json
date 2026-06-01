@@ -30,7 +30,8 @@
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.aryan257980.turbolearn"
+      "package": "com.aryan257980.turbolearn",
+      "enableProguardInReleaseBuilds": true
     },
     "web": {
       "output": "static",
