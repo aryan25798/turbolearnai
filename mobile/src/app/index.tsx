@@ -1774,7 +1774,7 @@ export default function HomeScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={ss.dashboardContainer}
     >
       <View style={ss.dashboardInner}>
