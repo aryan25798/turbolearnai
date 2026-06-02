@@ -1,7 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeAuth, getAuth, GoogleAuthProvider } from 'firebase/auth';
-// @ts-ignore
-import { getReactNativePersistence } from 'firebase/auth/react-native';
+import { 
+  initializeAuth, 
+  getAuth, 
+  GoogleAuthProvider,
+  // @ts-ignore
+  getReactNativePersistence 
+} from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
