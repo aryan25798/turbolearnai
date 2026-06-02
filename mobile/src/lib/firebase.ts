@@ -1,43 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { initializeAuth, getAuth, GoogleAuthProvider } from 'firebase/auth';
+// @ts-ignore
+import { getReactNativePersistence } from 'firebase/auth/react-native';
 import { initializeFirestore } from 'firebase/firestore';
 import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
-
-// ── localStorage shim backed by expo-secure-store ──
-// Firebase Auth's browserLocalPersistence reads/writes localStorage synchronously.
-// On React Native there's no localStorage, so we shim it with SecureStore's sync
-// getItem/setItem. Auth state survives app restarts without native Firebase modules.
-if (Platform.OS !== 'web' && typeof global.localStorage === 'undefined') {
-  const cache: Record<string, string | null> = {};
-  global.localStorage = {
-    getItem: (key: string) => {
-      if (key in cache) return cache[key];
-      try {
-        const value = SecureStore.getItem(key);
-        cache[key] = value;
-        return value;
-      } catch {
-        return cache[key] ?? null;
-      }
-    },
-    setItem: (key: string, value: string) => {
-      cache[key] = value;
-      try { SecureStore.setItemAsync(key, value).catch(() => {}); } catch { /* best-effort */ }
-    },
-    removeItem: (key: string) => {
-      delete cache[key];
-      try { SecureStore.deleteItemAsync(key).catch(() => {}); } catch { /* best-effort */ }
-    },
-    clear: () => {
-      for (const k of Object.keys(cache)) delete cache[k];
-    },
-    get length() {
-      return Object.keys(cache).length;
-    },
-    key: (index: number) => Object.keys(cache)[index] ?? null,
-  } as Storage;
-}
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -55,7 +22,13 @@ const googleProvider = new GoogleAuthProvider();
 
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  auth = getAuth(app);
+  if (Platform.OS === 'web') {
+    auth = getAuth(app);
+  } else {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  }
   db = initializeFirestore(app, { experimentalForceLongPolling: true });
 } catch (e) {
   console.error("🔥 Firebase initialization failed on startup:", e);
